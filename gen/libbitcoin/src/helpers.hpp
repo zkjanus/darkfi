@@ -2,17 +2,11 @@
 
 #include <memory>
 #include <bitcoin/system.hpp>
-#include "rust/cxx.h"
 
+namespace darkfi {
 
-namespace libbitcoin {
-
-namespace system {
-
-std::unique_ptr<hd_private> new_private_key(seed) {
-  return std::make_unique<hd_private>(seed);
+std::unique_ptr<libbitcoin::system::wallet::hd_private> new_private_key() {
+    return std::make_unique<libbitcoin::system::wallet::hd_private>();
 }
 
-}
-
-}
+} // namespace wallet

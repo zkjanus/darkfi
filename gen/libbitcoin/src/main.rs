@@ -6,9 +6,8 @@ use std::{
 };
 
 
-include_cpp! {    // C++ headers we want to include.
+include_cpp! {
     #include "bitcoin/system.hpp"
-//    #include "helpers.hpp"
 
     safety!(unsafe_ffi)
 
@@ -24,11 +23,15 @@ include_cpp! {    // C++ headers we want to include.
 
 #[cxx::bridge]
 mod bcffi {
+
     unsafe extern "C++" {
         include!("bitcoin/system.hpp");
+        include!("helpers.hpp");
+        #[namespace = "libbitcoin::system::wallet"]
+        type hd_private;
 
-        //#[namespace = "libbitcoin::system::wallet"]
-        //type hd_private;
+        #[namespace = "darkfi"]
+        fn new_private_key() -> UniquePtr<hd_private>;
     }
 
 }
