@@ -14,6 +14,10 @@ include_cpp! {
     generate!("libbitcoin::system::to_chunk")
     generate!("libbitcoin::system::data_chunk")
     generate!("libbitcoin::system::pseudo_random_fill")
+
+    // These types rely on std::array, which haven't been
+    // implemented in autocxx as of yet. So they are implemented
+    // using a manual cxx ffi below
     //generate!("libbitcoin::system::ec_secret")
     //generate!("libbitcoin::system::byte_array")
     //generate!("libbitcoin::system::wallet::hd_key")
