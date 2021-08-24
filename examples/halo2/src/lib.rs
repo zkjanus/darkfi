@@ -1,4 +1,5 @@
 pub mod circuit;
+//pub mod tree;
 
 use halo2::{
     arithmetic::{CurveExt, FieldExt},
@@ -7,6 +8,10 @@ use halo2::{
 use orchard::constants::fixed_bases::{
     VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES, VALUE_COMMITMENT_V_BYTES,
 };
+
+pub const MERKLE_DEPTH: usize = 32;
+
+pub const L_ORCHARD_MERKLE: usize = 255;
 
 #[allow(non_snake_case)]
 pub fn pedersen_commitment(value: u64, blind: Fq) -> Ep {
