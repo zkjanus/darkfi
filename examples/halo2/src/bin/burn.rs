@@ -10,27 +10,35 @@ use group::{
 use halo2::{
     arithmetic::{CurveAffine, Field, FieldExt},
     circuit::{floor_planner, Layouter},
+    dev::MockProver,
     pasta::{Fp, Fq},
     plonk::{Circuit, ConstraintSystem, Error},
 };
-use halo2_ecc::{chip::EccChip, gadget::FixedPoints};
+use halo2_ecc::{
+    chip::EccChip,
+    gadget::{FixedPoint, FixedPoints},
+};
 use halo2_poseidon::{
     pow5t3::Pow5T3Chip as PoseidonChip,
     primitive::{ConstantLength, Hash, P128Pow5T3 as OrchardNullifier},
 };
 use halo2_utilities::{
-    lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions,
+    lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
 };
-use orchard::constants::{fixed_bases::OrchardFixedBases, sinsemilla::MERKLE_CRH_PERSONALIZATION};
+use orchard::constants::{
+    fixed_bases::OrchardFixedBases, sinsemilla::MERKLE_CRH_PERSONALIZATION, OrchardHashDomains,
+};
 use rand::rngs::OsRng;
 use sinsemilla::{
-    gadget::HashDomains,
+    chip::SinsemillaChip,
+    gadget::{
+        HashDomain as SinsemillaHashDomain, Message as SinsemillaMessage,
+        MessagePiece as SinsemillaMessagePiece,
+    },
     primitive::{CommitDomain, HashDomain},
 };
 
-use halo2_examples::{circuit::Config, pedersen_commitment};
-
-pub const SAPLING_COMMITMENT_TREE_DEPTH: usize = 32;
+use halo2_examples::{circuit::BurnConfig, i2lebsp_k, pedersen_commitment, MERKLE_DEPTH};
 
 #[derive(Default, Debug)]
 struct BurnCircuit {
@@ -41,8 +49,7 @@ struct BurnCircuit {
     coin_blind: Option<Fp>,
     value_blind: Option<Fq>,
     asset_blind: Option<Fq>,
-    branch: u8,
-    isright: u8,
+    merkle_path: Option<Vec<(Fp, bool)>>,
     sig_secret: Option<Fq>,
 }
 
@@ -51,7 +58,7 @@ impl UtilitiesInstructions<Fp> for BurnCircuit {
 }
 
 impl Circuit<Fp> for BurnCircuit {
-    type Config = Config;
+    type Config = BurnConfig;
     type FloorPlanner = floor_planner::V1;
     //type FloorPlanner = SimpleFloorPlanner;
 
@@ -76,9 +83,13 @@ impl Circuit<Fp> for BurnCircuit {
         let q_add = meta.selector();
 
         let table_idx = meta.lookup_table_column();
+        let lookup = (
+            table_idx,
+            meta.lookup_table_column(),
+            meta.lookup_table_column(),
+        );
 
         let primary = meta.instance_column();
-
         meta.enable_equality(primary.into());
 
         for advice in advices.iter() {
@@ -95,7 +106,6 @@ impl Circuit<Fp> for BurnCircuit {
             meta.fixed_column(),
             meta.fixed_column(),
         ];
-
         let rc_a = lagrange_coeffs[2..5].try_into().unwrap();
         let rc_b = lagrange_coeffs[5..8].try_into().unwrap();
 
@@ -113,18 +123,30 @@ impl Circuit<Fp> for BurnCircuit {
         let poseidon_config = PoseidonChip::configure(
             meta,
             OrchardNullifier,
+            // We place the state columns after the partial_sbox column so that the
+            // pad-and-add region can be layed out more efficiently.
             advices[6..9].try_into().unwrap(),
             advices[5],
             rc_a,
             rc_b,
         );
 
-        Config {
+        let sinsemilla_config = SinsemillaChip::configure(
+            meta,
+            advices[..5].try_into().unwrap(),
+            advices[6],
+            lagrange_coeffs[0],
+            lookup,
+            range_check.clone(),
+        );
+
+        BurnConfig {
             primary,
             q_add,
             advices,
             ecc_config,
             poseidon_config,
+            sinsemilla_config,
         }
     }
 
@@ -133,6 +155,89 @@ impl Circuit<Fp> for BurnCircuit {
         config: Self::Config,
         mut layouter: impl Layouter<Fp>,
     ) -> Result<(), Error> {
+        // Load the Sinsemilla generator lookup table used by the whole circuit.
+        SinsemillaChip::load(config.sinsemilla_config.clone(), &mut layouter)?;
+
+        let sinsemilla_chip = config.sinsemilla_chip();
+        let ecc_chip = config.ecc_chip();
+
+        let value = self.load_private(
+            layouter.namespace(|| "load value"),
+            config.advices[0],
+            self.value,
+        )?;
+
+        let asset = self.load_private(
+            layouter.namespace(|| "load asset"),
+            config.advices[0],
+            self.asset,
+        )?;
+
+        // ================
+        // Value commitment
+        // ================
+
+        // This constant one is used for multiplication
+        let one = self.load_constant(
+            layouter.namespace(|| "constant one"),
+            config.advices[0],
+            Fp::one(),
+        )?;
+
+        // v*G_1
+        let (commitment, _) = {
+            let value_commit_v = OrchardFixedBases::ValueCommitV;
+            let value_commit_v = FixedPoint::from_inner(ecc_chip.clone(), value_commit_v);
+            value_commit_v.mul_short(layouter.namespace(|| "[value] ValueCommitV"), (value, one))?
+        };
+
+        // r_V*G_2
+        let (blind, _rcv) = {
+            let rcv = self.value_blind;
+            let value_commit_r = OrchardFixedBases::ValueCommitR;
+            let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), value_commit_r);
+            value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
+        };
+
+        let value_commit = commitment.add(layouter.namespace(|| "valuecommit"), &blind)?;
+        layouter.constrain_instance(value_commit.inner().x().cell(), config.primary, 1)?;
+        layouter.constrain_instance(value_commit.inner().y().cell(), config.primary, 2)?;
+
+        // ================
+        // Asset commitment
+        // ================
+
+        // v*G_1
+        let (commitment, _) = {
+            let asset_commit_v = OrchardFixedBases::ValueCommitV;
+            let asset_commit_v = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_v);
+            asset_commit_v.mul_short(layouter.namespace(|| "[asset] ValueCommitV"), (asset, one))?
+        };
+
+        // r_V*G_2
+        let (blind, _rca) = {
+            let rca = self.asset_blind;
+            let asset_commit_r = OrchardFixedBases::ValueCommitR;
+            let asset_commit_r = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_r);
+            asset_commit_r.mul(layouter.namespace(|| "[asset_blind] ValueCommitR"), rca)?
+        };
+
+        let asset_commit = commitment.add(layouter.namespace(|| "assetcommit"), &blind)?;
+        layouter.constrain_instance(asset_commit.inner().x().cell(), config.primary, 3)?;
+        layouter.constrain_instance(asset_commit.inner().y().cell(), config.primary, 4)?;
+
+        // =========================
+        // Signature key derivation
+        // =========================
+        let (sig_pub, _) = {
+            let spend_auth_g = OrchardFixedBases::SpendAuthG;
+            let spend_auth_g = FixedPoint::from_inner(ecc_chip.clone(), spend_auth_g);
+            spend_auth_g.mul(layouter.namespace(|| "[x_s] SpendAuthG"), self.sig_secret)?
+        };
+
+        layouter.constrain_instance(sig_pub.inner().x().cell(), config.primary, 6)?;
+        layouter.constrain_instance(sig_pub.inner().y().cell(), config.primary, 7)?;
+
         Ok(())
     }
 }
@@ -156,12 +261,14 @@ fn merkle_hash(depth: usize, lhs: &[u8; 32], rhs: &[u8; 32]) -> Fp {
     };
 
     // TODO: Review this
-    let merkletree: Vec<bool> = (0..6).map(|i| (depth >> i) & 1 == 1).collect();
+    //let merkletree: Vec<bool> = (0..6).map(|i| (depth >> i) & 1 == 1).collect();
+    //println!("{:?}", merkletree);
 
     let domain = HashDomain::new(MERKLE_CRH_PERSONALIZATION);
     domain
         .hash(
             iter::empty()
+                .chain(i2lebsp_k(depth).iter().copied())
                 .chain(lhs.iter().copied())
                 .chain(rhs.iter().copied()),
         )
@@ -225,7 +332,7 @@ fn main() {
     //
     // TODO: Review this
     let mut merkle_path = vec![true, false];
-    merkle_path.resize(32, true);
+    merkle_path.resize(MERKLE_DEPTH, true);
 
     let merkle_path: Vec<(Fp, bool)> = merkle_path
         .into_iter()
@@ -269,7 +376,7 @@ fn main() {
     // Return (nullifier, value_commit, asset_commit, merkle_root, sig_pubkey)
     // =======================================================================
     // (N, V, A, R, P_s)
-    let mut public_inputs = vec![
+    let public_inputs = vec![
         nullifier,
         *value_coords.x(),
         *value_coords.y(),
@@ -279,4 +386,26 @@ fn main() {
         *sig_coords.x(),
         *sig_coords.y(),
     ];
+
+    // println!("{:?}", asset_coords.x());
+    // println!("{:?}", asset_coords.y());
+
+    // ========
+    // ZK Proof
+    // ========
+    let circuit = BurnCircuit {
+        secret_key: Some(secret_key),
+        serial: Some(serial),
+        value: Some(Fp::from(value)),
+        asset: Some(Fp::from(asset)),
+        coin_blind: Some(coin_blind),
+        value_blind: Some(value_blind),
+        asset_blind: Some(asset_blind),
+        merkle_path: Some(merkle_path),
+        sig_secret: Some(sig_secret),
+    };
+
+    // Valid MockProver
+    let prover = MockProver::run(11, &circuit, vec![public_inputs.clone()]).unwrap();
+    assert_eq!(prover.verify(), Ok(()));
 }

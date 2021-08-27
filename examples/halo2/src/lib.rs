@@ -22,3 +22,25 @@ pub fn pedersen_commitment(value: u64, blind: Fq) -> Ep {
 
     V * value + R * blind
 }
+
+pub const K: usize = 10;
+
+pub fn gen_const_array<Output: Copy + Default, const LEN: usize>(
+    mut closure: impl FnMut(usize) -> Output,
+) -> [Output; LEN] {
+    let mut ret: [Output; LEN] = [Default::default(); LEN];
+    for (bit, val) in ret.iter_mut().zip((0..LEN).map(|idx| closure(idx))) {
+        *bit = val;
+    }
+    ret
+}
+
+pub fn i2lebsp<const NUM_BITS: usize>(int: u64) -> [bool; NUM_BITS] {
+    assert!(NUM_BITS <= 64);
+    gen_const_array(|mask: usize| (int & (1 << mask)) != 0)
+}
+
+pub fn i2lebsp_k(int: usize) -> [bool; K] {
+    assert!(int < (1 << K));
+    i2lebsp(int as u64)
+}

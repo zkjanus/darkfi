@@ -23,7 +23,7 @@ use halo2_utilities::{
 use orchard::constants::fixed_bases::OrchardFixedBases;
 use rand::rngs::OsRng;
 
-use halo2_examples::{circuit::Config, pedersen_commitment};
+use halo2_examples::{circuit::MintConfig, pedersen_commitment};
 
 const K: u32 = 9;
 
@@ -44,7 +44,7 @@ impl UtilitiesInstructions<Fp> for MintCircuit {
 }
 
 impl Circuit<Fp> for MintCircuit {
-    type Config = Config;
+    type Config = MintConfig;
     type FloorPlanner = floor_planner::V1;
     //type FloorPlanner = SimpleFloorPlanner;
 
