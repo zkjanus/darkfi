@@ -8,8 +8,8 @@ use group::{
     Curve,
 };
 use halo2::{
-    arithmetic::{CurveAffine, Field, FieldExt},
-    circuit::{floor_planner, Layouter},
+    arithmetic::{CurveAffine, Field},
+    circuit::{Layouter, SimpleFloorPlanner},
     dev::MockProver,
     pasta::{Fp, Fq},
     plonk::{Circuit, ConstraintSystem, Error},
@@ -25,10 +25,12 @@ use halo2_poseidon::{
 use halo2_utilities::{
     lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
 };
+#[allow(unused_imports)]
 use orchard::constants::{
     fixed_bases::OrchardFixedBases, sinsemilla::MERKLE_CRH_PERSONALIZATION, OrchardHashDomains,
 };
 use rand::rngs::OsRng;
+#[allow(unused_imports)]
 use sinsemilla::{
     chip::SinsemillaChip,
     gadget::{
@@ -59,8 +61,8 @@ impl UtilitiesInstructions<Fp> for BurnCircuit {
 
 impl Circuit<Fp> for BurnCircuit {
     type Config = BurnConfig;
-    type FloorPlanner = floor_planner::V1;
-    //type FloorPlanner = SimpleFloorPlanner;
+    //type FloorPlanner = floor_planner::V1;
+    type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
         Self::default()
@@ -160,6 +162,71 @@ impl Circuit<Fp> for BurnCircuit {
 
         let sinsemilla_chip = config.sinsemilla_chip();
         let ecc_chip = config.ecc_chip();
+
+        // TODO, get this out of the if clause
+        if self.secret_key.is_some() {
+            let mut bits: Vec<Option<bool>> = self
+                .secret_key
+                .unwrap()
+                .to_le_bits()
+                .iter()
+                .by_val()
+                .map(Some)
+                .collect();
+
+            // To 260 bits
+            bits.extend(&[Some(false), Some(false), Some(false), Some(false)]);
+
+            let bits0 = SinsemillaMessagePiece::from_bitstring(
+                sinsemilla_chip.clone(),
+                layouter.namespace(|| "some"),
+                &bits[..250],
+            )?;
+
+            let bits1 = SinsemillaMessagePiece::from_bitstring(
+                sinsemilla_chip.clone(),
+                layouter.namespace(|| "bits1"),
+                &bits[250..],
+            )?;
+
+            let mut serialbits: Vec<Option<bool>> = self
+                .serial
+                .unwrap()
+                .to_le_bits()
+                .iter()
+                .by_val()
+                .map(Some)
+                .collect();
+
+            serialbits.extend(&[Some(false), Some(false), Some(false), Some(false)]);
+
+            let bits2 = SinsemillaMessagePiece::from_bitstring(
+                sinsemilla_chip.clone(),
+                layouter.namespace(|| "bits2"),
+                &serialbits[..250],
+            )?;
+
+            let bits3 = SinsemillaMessagePiece::from_bitstring(
+                sinsemilla_chip.clone(),
+                layouter.namespace(|| "bits3"),
+                &serialbits[250..],
+            )?;
+
+            let message = SinsemillaMessage::from_pieces(
+                sinsemilla_chip.clone(),
+                vec![bits0, bits1, bits2, bits3],
+            );
+
+            let domain = SinsemillaHashDomain::new(
+                sinsemilla_chip.clone(),
+                ecc_chip.clone(),
+                &OrchardHashDomains::MerkleCrh,
+            );
+
+            let hash = domain.hash(layouter.namespace(|| "hash nullifier"), message);
+            // Nullifier
+            layouter.constrain_instance(hash.unwrap().0.inner().cell(), config.primary, 0)?;
+        }
 
         let value = self.load_private(
             layouter.namespace(|| "load value"),
@@ -287,13 +354,17 @@ fn main() {
     // N = SinsemillaHash(secret_key, serial)
     //
     let domain = HashDomain::new(MERKLE_CRH_PERSONALIZATION);
+    let mut bits0: Vec<bool> = secret_key.to_le_bits().iter().by_val().collect();
+    let mut bits1: Vec<bool> = serial.to_le_bits().iter().by_val().collect();
+    // We extend these because sinsemilla wants modulo 10, and the above are 256 bits.
+    bits0.extend(&[false, false, false, false]);
+    bits1.extend(&[false, false, false, false]);
+
     let nullifier = domain
-        .hash(
-            iter::empty()
-                .chain(secret_key.to_le_bits().iter().by_val())
-                .chain(serial.to_le_bits().iter().by_val()),
-        )
+        .hash(iter::empty().chain(bits0).chain(bits1))
         .unwrap();
+
+    println!("{:?}", nullifier);
 
     // =====================
     // Public key derivation
@@ -406,6 +477,6 @@ fn main() {
     };
 
     // Valid MockProver
-    let prover = MockProver::run(11, &circuit, vec![public_inputs.clone()]).unwrap();
+    let prover = MockProver::run(12, &circuit, vec![public_inputs.clone()]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
 }
