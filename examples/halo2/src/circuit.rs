@@ -17,6 +17,16 @@ pub struct MintConfig {
     pub poseidon_config: PoseidonConfig<pallas::Base>,
 }
 
+impl MintConfig {
+    pub fn ecc_chip(&self) -> EccChip<OrchardFixedBases> {
+        EccChip::construct(self.ecc_config.clone())
+    }
+
+    pub fn poseidon_chip(&self) -> PoseidonChip<pallas::Base> {
+        PoseidonChip::construct(self.poseidon_config.clone())
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct BurnConfig {
     pub primary: Column<InstanceColumn>,

@@ -3,9 +3,9 @@ use std::{convert::TryInto, time::Instant};
 use group::{ff::Field, Curve, Group};
 use halo2::{
     arithmetic::CurveAffine,
-    circuit::{floor_planner, Layouter},
+    circuit::{Layouter, SimpleFloorPlanner},
     dev::MockProver,
-    pasta::{vesta, Ep, Fp, Fq},
+    pasta::{pallas, vesta},
     plonk,
     plonk::{Circuit, ConstraintSystem, Error},
     poly::commitment,
@@ -25,34 +25,42 @@ use rand::rngs::OsRng;
 
 use halo2_examples::{circuit::MintConfig, pedersen_commitment};
 
+// The number of rows in our circuit cannot exceed 2^k
 const K: u32 = 9;
 
+// This struct defines our circuit and cointains its private inputs.
 #[derive(Default, Debug)]
 struct MintCircuit {
-    pub_x: Option<Fp>,       // x coordinate for pubkey
-    pub_y: Option<Fp>,       // y coordinate for pubkey
-    value: Option<Fp>,       // The value of this coin
-    asset: Option<Fp>,       // The asset ID
-    serial: Option<Fp>,      // Unique serial number corresponding to this coin
-    coin_blind: Option<Fp>,  // Random blinding factor for coin
-    value_blind: Option<Fq>, // Random blinding factor for value commitment
-    asset_blind: Option<Fq>, // Random blinding factor for the asset ID
+    pub_x: Option<pallas::Base>,         // x coordinate for pubkey
+    pub_y: Option<pallas::Base>,         // y coordinate for pubkey
+    value: Option<pallas::Base>,         // The value of this coin
+    asset: Option<pallas::Base>,         // The asset ID
+    serial: Option<pallas::Base>,        // Unique serial number corresponding to this coin
+    coin_blind: Option<pallas::Base>,    // Random blinding factor for coin
+    value_blind: Option<pallas::Scalar>, // Random blinding factor for value commitment
+    asset_blind: Option<pallas::Scalar>, // Random blinding factor for the asset ID
 }
 
-impl UtilitiesInstructions<Fp> for MintCircuit {
-    type Var = CellValue<Fp>;
+// The public input array offsets
+const COIN_OFFSET: usize = 0;
+const VALCOMX_OFFSET: usize = 1;
+const VALCOMY_OFFSET: usize = 2;
+const ASSCOMX_OFFSET: usize = 3;
+const ASSCOMY_OFFSET: usize = 4;
+
+impl UtilitiesInstructions<pallas::Base> for MintCircuit {
+    type Var = CellValue<pallas::Base>;
 }
 
-impl Circuit<Fp> for MintCircuit {
+impl Circuit<pallas::Base> for MintCircuit {
     type Config = MintConfig;
-    type FloorPlanner = floor_planner::V1;
-    //type FloorPlanner = SimpleFloorPlanner;
+    type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
         Self::default()
     }
 
-    fn configure(meta: &mut ConstraintSystem<Fp>) -> Self::Config {
+    fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
         let advices = [
             meta.advice_column(),
             meta.advice_column(),
@@ -69,12 +77,6 @@ impl Circuit<Fp> for MintCircuit {
         let q_add = meta.selector();
 
         let table_idx = meta.lookup_table_column();
-
-        // let lookup = (
-        // table_idx,
-        // meta.lookup_table_column(),
-        // meta.lookup_table_column(),
-        // );
 
         let primary = meta.instance_column();
 
@@ -118,7 +120,7 @@ impl Circuit<Fp> for MintCircuit {
             rc_b,
         );
 
-        Config {
+        MintConfig {
             primary,
             q_add,
             advices,
@@ -130,10 +132,9 @@ impl Circuit<Fp> for MintCircuit {
     fn synthesize(
         &self,
         config: Self::Config,
-        mut layouter: impl Layouter<Fp>,
+        mut layouter: impl Layouter<pallas::Base>,
     ) -> Result<(), Error> {
-        // Construct the ECC chip.
-        let ecc_chip = EccChip::construct(config.ecc_config.clone());
+        let ecc_chip = config.ecc_chip();
 
         let pub_x = self.load_private(
             layouter.namespace(|| "load pubkey x"),
@@ -166,15 +167,14 @@ impl Circuit<Fp> for MintCircuit {
             self.coin_blind,
         )?;
 
-        // =============
-        // = Coin hash =
-        // =============
-
-        // TODO: This is a hack until issue is resolved in poseidon gadget
-        let mut coin = Fp::zero();
+        // =========
+        // Coin hash
+        // =========
+        // TODO: This is a hack, but may work.
+        // At the moment, we make three hashes and then the Coin C is their sum.
+        // C = Poseidon(pub_x, pub_y) + Poseidon(value, asset) + Poseidon(serial, coin_blind)
+        let mut coin = pallas::Base::zero();
         let messages = [[pub_x, pub_y], [value, asset], [serial, coin_blind]];
-        //let messages = [[pub_x, pub_y], [value, asset]];
-        //let messages = [[pub_x, pub_y]];
         for msg in messages.iter() {
             let poseidon_message = layouter.assign_region(
                 || "load message",
@@ -197,7 +197,7 @@ impl Circuit<Fp> for MintCircuit {
             )?;
 
             let poseidon_hasher = PoseidonHash::init(
-                PoseidonChip::construct(config.poseidon_config.clone()),
+                config.poseidon_chip(),
                 layouter.namespace(|| "Poseidon init"),
                 ConstantLength::<2>,
             )?;
@@ -205,16 +205,12 @@ impl Circuit<Fp> for MintCircuit {
             let poseidon_output =
                 poseidon_hasher.hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
 
-            let poseidon_output: CellValue<Fp> = poseidon_output.inner().into();
+            let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
 
             if !poseidon_output.value().is_none() {
                 coin += poseidon_output.value().unwrap();
             }
         }
-
-        // if coin != Fp::zero() {
-        // println!("circuit hash: {:?}", coin);
-        // }
 
         let hash = self.load_private(
             layouter.namespace(|| "load hash"),
@@ -222,28 +218,28 @@ impl Circuit<Fp> for MintCircuit {
             Some(coin),
         )?;
 
-        // Constrain the coin C; index in public values is 0
-        layouter.constrain_instance(hash.cell(), config.primary, 0)?;
+        // Constrain the coin C
+        layouter.constrain_instance(hash.cell(), config.primary, COIN_OFFSET)?;
 
-        // ====================
-        // = Value commitment =
-        // ====================
+        // ================
+        // Value commitment
+        // ================
 
         // This constant one is used for multiplication
         let one = self.load_constant(
             layouter.namespace(|| "constant one"),
             config.advices[0],
-            Fp::one(),
+            pallas::Base::one(),
         )?;
 
-        // v*G_1
+        // v * G_1
         let (commitment, _) = {
             let value_commit_v = OrchardFixedBases::ValueCommitV;
             let value_commit_v = FixedPoint::from_inner(ecc_chip.clone(), value_commit_v);
             value_commit_v.mul_short(layouter.namespace(|| "[value] ValueCommitV"), (value, one))?
         };
 
-        // r_V*G_2
+        // r_V * G_2
         let (blind, _rcv) = {
             let rcv = self.value_blind;
             let value_commit_r = OrchardFixedBases::ValueCommitR;
@@ -251,23 +247,31 @@ impl Circuit<Fp> for MintCircuit {
             value_commit_r.mul(layouter.namespace(|| "[value_blind] ValueCommitR"), rcv)?
         };
 
-        // Constrain the x and y; indexes in public values are 1 and 2
+        // Constrain the value commitment coordinates
         let value_commit = commitment.add(layouter.namespace(|| "valuecommit"), &blind)?;
-        layouter.constrain_instance(value_commit.inner().x().cell(), config.primary, 1)?;
-        layouter.constrain_instance(value_commit.inner().y().cell(), config.primary, 2)?;
+        layouter.constrain_instance(
+            value_commit.inner().x().cell(),
+            config.primary,
+            VALCOMX_OFFSET,
+        )?;
+        layouter.constrain_instance(
+            value_commit.inner().y().cell(),
+            config.primary,
+            VALCOMY_OFFSET,
+        )?;
 
-        // ====================
-        // = Asset commitment =
-        // ====================
+        // ================
+        // Asset commitment
+        // ================
 
-        // a*G_1
+        // a * G_1
         let (commitment, _) = {
             let asset_commit_v = OrchardFixedBases::ValueCommitV;
             let asset_commit_v = FixedPoint::from_inner(ecc_chip.clone(), asset_commit_v);
             asset_commit_v.mul_short(layouter.namespace(|| "[asset] ValueCommitV"), (asset, one))?
         };
 
-        // r_A*G_2
+        // r_A * G_2
         let (blind, _rca) = {
             let rca = self.asset_blind;
             let asset_commit_r = OrchardFixedBases::ValueCommitR;
@@ -275,11 +279,20 @@ impl Circuit<Fp> for MintCircuit {
             asset_commit_r.mul(layouter.namespace(|| "[asset_blind] ValueCommitR"), rca)?
         };
 
-        // Constrain the x and y; indexes in public values are 3 and 4
+        // Constrain the asset commitment coordinates
         let asset_commit = commitment.add(layouter.namespace(|| "assetcommit"), &blind)?;
-        layouter.constrain_instance(asset_commit.inner().x().cell(), config.primary, 3)?;
-        layouter.constrain_instance(asset_commit.inner().y().cell(), config.primary, 4)?;
+        layouter.constrain_instance(
+            asset_commit.inner().x().cell(),
+            config.primary,
+            ASSCOMX_OFFSET,
+        )?;
+        layouter.constrain_instance(
+            asset_commit.inner().y().cell(),
+            config.primary,
+            ASSCOMY_OFFSET,
+        )?;
 
+        // At this point we've enforced all of our public inputs.
         Ok(())
     }
 }
@@ -329,7 +342,11 @@ impl AsRef<[u8]> for Proof {
 }
 
 impl Proof {
-    fn create(pk: &ProvingKey, circuits: &[MintCircuit], pubinputs: &[Fp]) -> Result<Self, Error> {
+    fn create(
+        pk: &ProvingKey,
+        circuits: &[MintCircuit],
+        pubinputs: &[pallas::Base],
+    ) -> Result<Self, Error> {
         let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
         plonk::create_proof(
             &pk.params,
@@ -341,7 +358,7 @@ impl Proof {
         Ok(Proof(transcript.finalize()))
     }
 
-    fn verify(&self, vk: &VerifyingKey, pubinputs: &[Fp]) -> Result<(), plonk::Error> {
+    fn verify(&self, vk: &VerifyingKey, pubinputs: &[pallas::Base]) -> Result<(), plonk::Error> {
         let msm = vk.params.empty_msm();
         let mut transcript = Blake2bRead::init(&self.0[..]);
         let guard = plonk::verify_proof(&vk.params, &vk.vk, msm, &[&[pubinputs]], &mut transcript)?;
@@ -359,27 +376,26 @@ impl Proof {
 }
 
 fn main() {
-    let pubkey = Ep::random(&mut OsRng);
+    let pubkey = pallas::Point::random(&mut OsRng);
     let coords = pubkey.to_affine().coordinates().unwrap();
 
     let value = 110;
     let asset = 1;
 
-    let value_blind = Fq::random(&mut OsRng);
-    let asset_blind = Fq::random(&mut OsRng);
+    let value_blind = pallas::Scalar::random(&mut OsRng);
+    let asset_blind = pallas::Scalar::random(&mut OsRng);
 
-    let serial = Fp::random(&mut OsRng);
-    let coin_blind = Fp::random(&mut OsRng);
+    let serial = pallas::Base::random(&mut OsRng);
+    let coin_blind = pallas::Base::random(&mut OsRng);
 
-    let mut coin = Fp::zero();
+    let mut coin = pallas::Base::zero();
 
     let messages = [
         [*coords.x(), *coords.y()],
-        [Fp::from(value), Fp::from(asset)],
+        [pallas::Base::from(value), pallas::Base::from(asset)],
         [serial, coin_blind],
     ];
 
-    // TODO: This is a hack until issue is fixed in poseidon gadget
     for msg in messages.iter() {
         coin += Hash::init(OrchardNullifier, ConstantLength::<2>).hash(*msg);
     }
@@ -413,15 +429,15 @@ fn main() {
     let prover = MockProver::run(K, &circuit, vec![public_inputs.clone()]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
 
-    // Add 1 to break the public inputs
-    public_inputs[0] += Fp::from(0xdeadbeef);
+    // Break the public inputs by adding 0xdeadbeef to the Coin C
+    public_inputs[0] += pallas::Base::from(0xdeadbeef);
 
     // Invalid MockProver
     let prover = MockProver::run(K, &circuit, vec![public_inputs.clone()]).unwrap();
     assert!(prover.verify().is_err());
 
-    // Remove 1 to make the public inputs valid again
-    public_inputs[0] -= Fp::from(0xdeadbeef);
+    // Make the public inputs valid again.
+    public_inputs[0] -= pallas::Base::from(0xdeadbeef);
 
     // Actual ZK proof
     let start = Instant::now();
