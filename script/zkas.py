@@ -21,7 +21,8 @@ FUNC_ID_CONSTRAIN_INSTANCE      = 2
 FUNC_ID_EC_MUL_SHORT            = 3
 FUNC_ID_EC_MUL                  = 4
 FUNC_ID_EC_ADD                  = 5
-FUNC_ID_EC_CONSTRAIN_INSTANCE   = 6
+FUNC_ID_EC_GET_X                = 6
+FUNC_ID_EC_GET_Y                = 7
 
 class FuncFormat:
 
@@ -60,8 +61,11 @@ function_formats = {
         FUNC_ID_EC_ADD,         [TYPE_ID_EC_POINT], [TYPE_ID_EC_POINT,
                                                      TYPE_ID_EC_POINT]
     ),
-    "ec_constrain_instance": FuncFormat(
-        FUNC_ID_EC_CONSTRAIN_INSTANCE, [],          [TYPE_ID_EC_POINT]
+    "ec_get_x": FuncFormat(
+        FUNC_ID_EC_GET_X,       [TYPE_ID_BASE],     [TYPE_ID_EC_POINT]
+    ),
+    "ec_get_y": FuncFormat(
+        FUNC_ID_EC_GET_Y,       [TYPE_ID_BASE],     [TYPE_ID_EC_POINT]
     ),
 }
 
@@ -253,6 +257,9 @@ class DynamicTracer:
 
                 for return_value, return_type \
                     in zip(return_values, func_format.return_types):
+
+                    # Note that later variables shadow earlier ones.
+                    # We accept this.
 
                     stack[return_value] = return_type
 
