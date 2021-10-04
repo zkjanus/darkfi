@@ -1,6 +1,10 @@
 from .types import type_id_to_name, func_id_to_name
 
-def output(output, contracts):
+def output(output, contracts, constants):
+    output.write("Constants:\n")
+    for variable in constants.variables():
+        type_id = constants.lookup(variable)
+        output.write(f"  {type_id} {variable}\n")
     for contract in contracts:
         output.write(f"{contract.name}:\n")
 

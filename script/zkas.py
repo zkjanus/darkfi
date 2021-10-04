@@ -10,12 +10,30 @@ class CompileException(Exception):
         self.error_message = error_message
         self.line = line
 
+class Constants:
+
+    def __init__(self):
+        self.table = []
+        self.map = {}
+
+    def add(self, variable, type_id):
+        idx = len(self.table)
+        self.table.append(type_id)
+        self.map[variable] = idx
+
+    def lookup(self, variable):
+        idx = self.map[variable]
+        return self.table[idx]
+
+    def variables(self):
+        return self.map.keys()
+
 class SyntaxStruct:
 
     def __init__(self):
         self.contracts = {}
         self.circuits = {}
-        self.constants = {}
+        self.constants = Constants()
 
     def parse_contract(self, line, it):
         assert line.tokens[0] == "contract"
@@ -73,7 +91,7 @@ class SyntaxStruct:
         if type_name not in allowed_types:
             raise CompileException("unknown type '{type}'", line)
         type_id = allowed_types[type_name]
-        self.constants[variable] = type_id
+        self.constants.add(variable, type_id)
 
     def verify(self):
         self.static_checks()
@@ -161,12 +179,12 @@ class DynamicTracer:
     def execute(self):
         stack = {}
 
+        # Load constants
+        for variable in self.constants.variables():
+            stack[variable] = self.constants.lookup(variable)
+
         # Preload stack with our witness values
         for type_id, variable, line in self.witness:
-            stack[variable] = type_id
-
-        # Load constants
-        for variable, type_id in self.constants.items():
             stack[variable] = type_id
 
         for i, (func_format, return_values, args, code_line) \
@@ -239,12 +257,13 @@ class Compiler:
             # Create mapping from variable name
             stack_vars[variable] = (type_id, idx)
 
-        # Preload stack with our witness values
-        for type_id, variable, line in self.witness:
+        # Load constants
+        for variable in self.constants.variables():
+            type_id = self.constants.lookup(variable)
             alloc(variable, type_id)
 
-        # Load constants
-        for variable, type_id in self.constants.items():
+        # Preload stack with our witness values
+        for type_id, variable, line in self.witness:
             alloc(variable, type_id)
 
         for i, (func_format, return_values, args, code_line) \
@@ -342,27 +361,28 @@ def main():
             compiler = Compiler(witness, uncompiled_code, syntax.constants)
             code = compiler.compile()
             contracts.append(CompiledContract(name, witness, code))
+        constants = syntax.constants
         if args.display:
             from zkas.text_output import output
             if args.output is None:
-                output(sys.stdout, contracts)
+                output(sys.stdout, contracts, constants)
             else:
                 with open(outpath, "w") as file:
-                    output(file, contracts)
+                    output(file, contracts, constants)
         elif args.bincode:
             from zkas.bincode_output import output
             outpath = args.output
             if args.output is None:
                 outpath = args.SOURCE + ".bin"
             with open(outpath, "wb") as file:
-                output(file, contracts)
+                output(file, contracts, constants)
         else:
             from zkas.text_output import output
             if args.output is None:
-                output(sys.stdout, contracts)
+                output(sys.stdout, contracts, constants)
             else:
                 with open(outpath, "w") as file:
-                    output(file, contracts)
+                    output(file, contracts, constants)
     except CompileException as ex:
         print(f"Error: {ex.error_message}", file=sys.stderr)
         if ex.line is not None:
