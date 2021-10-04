@@ -3,7 +3,6 @@ constant EcFixedPoint VALUE_COMMIT_RANDOM
 
 contract Mint {
     Base pub_x
-    Base pub_x
     Base pub_y
     Base value
     Base asset

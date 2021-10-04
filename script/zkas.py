@@ -189,13 +189,32 @@ class DynamicTracer:
 
                 assert len(return_values) == len(func_format.return_types)
 
-                for return_value, return_type_id \
+                for return_variable, return_type_id \
                     in zip(return_values, func_format.return_types):
 
                     # Note that later variables shadow earlier ones.
                     # We accept this.
 
-                    stack[return_value] = return_type_id
+                    stack[return_variable] = return_type_id
+
+class CodeLine:
+
+    def __init__(self, func_format, return_values, args, arg_locs, code_line):
+        self.func_format = func_format
+        self.return_values = return_values
+        self.args = args
+        self.arg_locs = arg_locs
+        self.code_line = code_line
+
+    def func_name(self):
+        return func_id_to_name[self.func_format.func_id]
+
+class CompiledContract:
+
+    def __init__(self, name, witness, code):
+        self.name = name
+        self.witness = witness
+        self.code = code
 
 class Compiler:
 
@@ -205,13 +224,61 @@ class Compiler:
         self.constants = constants
 
     def compile(self):
+        code = []
+
+        # Each unique type_id has its own stack
+        stacks = [[] for i in range(TYPE_ID_LAST)]
+        # Map from variable name to stacks above
+        stack_vars = {}
+
+        def alloc(variable, type_id):
+            assert type_id <= len(stacks)
+            idx = len(stacks[type_id])
+            # Add variable to the stack for its type_id
+            stacks[type_id].append(variable)
+            # Create mapping from variable name
+            stack_vars[variable] = (type_id, idx)
+
+        # Preload stack with our witness values
+        for type_id, variable, line in self.witness:
+            alloc(variable, type_id)
+
+        # Load constants
+        for variable, type_id in self.constants.items():
+            alloc(variable, type_id)
+
         for i, (func_format, return_values, args, code_line) \
             in enumerate(self.uncompiled_code):
 
             assert len(args) == len(func_format.param_types)
 
+            arg_locs = []
+
+            # Loop through all arguments
             for variable, type_id in zip(args, func_format.param_types):
-                pass
+                assert type_id <= len(stacks)
+                assert variable in stack_vars
+                # Find the index for the M by N matrix of our variable
+                loc_type_id, loc_idx = stack_vars[variable]
+                assert type_id == loc_type_id
+                assert stacks[loc_type_id][loc_idx] == variable
+
+                # This is the info to be serialized, not the variable names
+                arg_locs.append((loc_type_id, loc_idx))
+
+            assert len(return_values) == len(func_format.return_types)
+
+            for return_variable, return_type_id \
+                in zip(return_values, func_format.return_types):
+
+                # Allocate returned values so they can be used by
+                # subsequent function calls.
+                alloc(return_variable, return_type_id)
+
+            code.append(CodeLine(func_format, return_values, args,
+                                 arg_locs, code_line))
+
+        return code
 
 class Line:
 
@@ -270,27 +337,32 @@ def main():
     try:
         syntax = parse(source)
         schema = syntax.verify()
+        contracts = []
+        for name, witness, uncompiled_code in schema:
+            compiler = Compiler(witness, uncompiled_code, syntax.constants)
+            code = compiler.compile()
+            contracts.append(CompiledContract(name, witness, code))
         if args.display:
             from zkas.text_output import output
             if args.output is None:
-                output(sys.stdout, schema)
+                output(sys.stdout, contracts)
             else:
                 with open(outpath, "w") as file:
-                    output(file, schema)
+                    output(file, contracts)
         elif args.bincode:
             from zkas.bincode_output import output
             outpath = args.output
             if args.output is None:
                 outpath = args.SOURCE + ".bin"
             with open(outpath, "wb") as file:
-                output(file, schema)
+                output(file, contracts)
         else:
             from zkas.text_output import output
             if args.output is None:
-                output(sys.stdout, schema)
+                output(sys.stdout, contracts)
             else:
                 with open(outpath, "w") as file:
-                    output(file, schema)
+                    output(file, contracts)
     except CompileException as ex:
         print(f"Error: {ex.error_message}", file=sys.stderr)
         if ex.line is not None:
