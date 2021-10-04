@@ -1,3 +1,5 @@
+import struct
+
 def varuint(value):
     if value <= 0xfc:
         return struct.pack("<B", value)
@@ -9,10 +11,16 @@ def varuint(value):
         return struct.pack("<BQ", 0xff, value)
 
 def output_contract(output, contract):
-    output.write(varuint(len(contract_name)))
-    output.write(contract_name.encode())
+    output.write(varuint(len(contract.name)))
+    output.write(contract.name.encode())
 
 def output(output, contracts, constants):
+    output.write(varuint(len(constants.variables())))
+    for variable in constants.variables():
+        type_id = constants.lookup(variable)
+        type_id_bytes = struct.pack("<I", type_id)
+        assert len(type_id_bytes) == 4
+        output.write(type_id_bytes)
     for contract in contracts:
         output_contract(output, contract)
 
