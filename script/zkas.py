@@ -199,11 +199,11 @@ class DynamicTracer:
 
 class CodeLine:
 
-    def __init__(self, func_format, return_values, args, arg_locs, code_line):
+    def __init__(self, func_format, return_values, args, arg_idxs, code_line):
         self.func_format = func_format
         self.return_values = return_values
         self.args = args
-        self.arg_locs = arg_locs
+        self.arg_idxs = arg_idxs
         self.code_line = code_line
 
     def func_name(self):
@@ -252,7 +252,7 @@ class Compiler:
 
             assert len(args) == len(func_format.param_types)
 
-            arg_locs = []
+            arg_idxs = []
 
             # Loop through all arguments
             for variable, type_id in zip(args, func_format.param_types):
@@ -264,7 +264,7 @@ class Compiler:
                 assert stacks[loc_type_id][loc_idx] == variable
 
                 # This is the info to be serialized, not the variable names
-                arg_locs.append((loc_type_id, loc_idx))
+                arg_idxs.append(loc_idx)
 
             assert len(return_values) == len(func_format.return_types)
 
@@ -276,7 +276,7 @@ class Compiler:
                 alloc(return_variable, return_type_id)
 
             code.append(CodeLine(func_format, return_values, args,
-                                 arg_locs, code_line))
+                                 arg_idxs, code_line))
 
         return code
 

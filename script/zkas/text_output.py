@@ -13,5 +13,5 @@ def output(output, contracts):
         for code in contract.code:
             output.write(f"    # args = {code.args}\n")
             output.write(f"    {code.func_name()} {code.return_values} "
-                             f"{code.arg_locs}\n")
+                             f"{code.arg_idxs}\n")
 
