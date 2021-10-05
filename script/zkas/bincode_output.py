@@ -18,9 +18,10 @@ def output(output, contracts, constants):
     output.write(varuint(len(constants.variables())))
     for variable in constants.variables():
         type_id = constants.lookup(variable)
-        type_id_bytes = struct.pack("<I", type_id)
-        assert len(type_id_bytes) == 4
+        type_id_bytes = struct.pack("<B", type_id)
+        assert len(type_id_bytes) == 1
         output.write(type_id_bytes)
+    output.write(varuint(len(contracts)))
     for contract in contracts:
         output_contract(output, contract)
 

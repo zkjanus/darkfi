@@ -126,5 +126,9 @@ path = "src/bin/darkfid.rs"
 name = "drk"
 path = "src/bin/drk.rs"
 
+[[bin]]
+name = "vm2"
+path = "src/bin/vm2.rs"
+
 [profile.release]
 debug = 1
