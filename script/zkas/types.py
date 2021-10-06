@@ -1,16 +1,14 @@
 TYPE_ID_BASE                    = 0
 TYPE_ID_SCALAR                  = 1
 TYPE_ID_EC_POINT                = 2
-TYPE_ID_EC_CONSTANT_POINT_SHORT = 3
-TYPE_ID_EC_CONSTANT_POINT       = 4
+TYPE_ID_EC_FIXED_POINT          = 3
 # This is so we know the number of TYPE_ID stacks
-TYPE_ID_LAST                    = 5
+TYPE_ID_LAST                    = 4
 
 allowed_types = {
     "Base":                 TYPE_ID_BASE,
     "Scalar":               TYPE_ID_SCALAR,
-    "EcFixedPointShort":    TYPE_ID_EC_CONSTANT_POINT_SHORT,
-    "EcFixedPoint":         TYPE_ID_EC_CONSTANT_POINT
+    "EcFixedPoint":         TYPE_ID_EC_FIXED_POINT
 }
 # Used for debug and error messages
 type_id_to_name = dict((value, key) for key, value in allowed_types.items())
@@ -51,11 +49,11 @@ function_formats = {
     ),
     "ec_mul_short": FuncFormat(
         FUNC_ID_EC_MUL_SHORT,   [TYPE_ID_EC_POINT], [TYPE_ID_BASE,
-                                                TYPE_ID_EC_CONSTANT_POINT_SHORT]
+                                                     TYPE_ID_EC_FIXED_POINT]
     ),
     "ec_mul": FuncFormat(
         FUNC_ID_EC_MUL,         [TYPE_ID_EC_POINT], [TYPE_ID_SCALAR,
-                                                     TYPE_ID_EC_CONSTANT_POINT]
+                                                     TYPE_ID_EC_FIXED_POINT]
     ),
     "ec_add": FuncFormat(
         FUNC_ID_EC_ADD,         [TYPE_ID_EC_POINT], [TYPE_ID_EC_POINT,

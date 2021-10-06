@@ -1,4 +1,4 @@
-constant EcFixedPointShort VALUE_COMMIT_VALUE
+constant EcFixedPoint VALUE_COMMIT_VALUE
 constant EcFixedPoint VALUE_COMMIT_RANDOM
 
 contract Mint {

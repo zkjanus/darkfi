@@ -1,10 +1,10 @@
 use std::collections::HashMap;
+use orchard::constants::fixed_bases::OrchardFixedBases;
 
 pub enum ZkType {
     Base,
     Scalar,
     EcPoint,
-    EcConstPointShort,
     EcConstPoint,
 }
 
@@ -31,3 +31,12 @@ pub struct ZkContract {
     pub witness: Vec<ZkType>,
     pub code: Vec<ZkFunctionCall>,
 }
+
+pub struct ZkInterpreter {
+}
+
+impl ZkInterpreter {
+    fn load_const_point(&mut self, point: &OrchardFixedBases) {
+    }
+}
+

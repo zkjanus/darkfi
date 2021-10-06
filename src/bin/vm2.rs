@@ -10,8 +10,8 @@ fn main() -> Result<()> {
     let file = File::open("proof/mint.zk.bin")?;
     let zkbin = drk::vm2::ZkBinary::decode(file)?;
     for contract_name in zkbin.contracts.keys() {
-        println!("{}", contract_name);
+        println!("Loaded '{}' contract.", contract_name);
     }
-    println!("Loaded contract: [{:?}]", start.elapsed());
+    println!("Load time: [{:?}]", start.elapsed());
     Ok(())
 }

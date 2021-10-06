@@ -23,8 +23,7 @@ impl Decodable for ZkType {
             0 => Ok(Self::Base),
             1 => Ok(Self::Scalar),
             2 => Ok(Self::EcPoint),
-            3 => Ok(Self::EcConstPointShort),
-            4 => Ok(Self::EcConstPoint),
+            3 => Ok(Self::EcConstPoint),
             _i => Err(Error::BadOperationType),
         }
     }

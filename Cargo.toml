@@ -10,13 +10,13 @@ name = "drk"
 [dependencies]
 ff = "0.8"
 group = "0.8"
-bellman = { version = "0.8", default-features = false, features = ["groth16"] }
+#bellman = { version = "0.8", default-features = false, features = ["groth16"] }
 bls12_381 = "0.3.1"
 jubjub = "0.5.1"
 bs58 = "0.4.0"
 
-zcash_primitives = "0.5.0"
-zcash_proofs = "0.5.0"
+#zcash_primitives = "0.5.0"
+#zcash_proofs = "0.5.0"
 # zcash_primitives = { git = "https://github.com/zcash/librustzcash" }
 #zcash_proofs = { git = "https://github.com/zcash/librustzcash" }
 #zcash_proofs = { git = "https://github.com/narodnik/librustzcash" }
@@ -28,7 +28,7 @@ rand_xorshift = "0.2"
 blake2s_simd = "0.5"
 blake2b_simd = "0.5.11"
 crypto_api_chachapoly = "0.4"
-bitvec = "0.18"
+#bitvec = "0.18"
 bimap = "0.5.2"
 async-trait = "0.1.42"
 multimap = "0.8.2"
@@ -132,3 +132,30 @@ path = "src/bin/vm2.rs"
 
 [profile.release]
 debug = 1
+
+[dependencies.halo2]
+git = "https://github.com/zcash/halo2.git"
+rev = "236a5e37a53152b49bc8c19049bc98e67968fc1c"
+features = ["dev-graph", "gadget-traces", "sanity-checks"]
+
+[dependencies.halo2_poseidon]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f847a7389fc8356143b40d40c28f509a559e2671"
+features = ["halo2"]
+
+[dependencies.halo2_utilities]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f847a7389fc8356143b40d40c28f509a559e2671"
+
+[dependencies.halo2_ecc]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f847a7389fc8356143b40d40c28f509a559e2671"
+
+[dependencies.sinsemilla]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f847a7389fc8356143b40d40c28f509a559e2671"
+
+[dependencies.orchard]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f847a7389fc8356143b40d40c28f509a559e2671"
+
