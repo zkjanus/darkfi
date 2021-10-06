@@ -22,8 +22,8 @@ pub mod tx;
 pub mod util;
 pub mod vm;
 pub mod vm2;
-pub mod vm_serial;
 pub mod vm2_serial;
+pub mod vm_serial;
 pub mod wallet;
 
 pub use crate::bls_extensions::BlsStringConversion;

@@ -10,18 +10,39 @@ def varuint(value):
     else:
         return struct.pack("<BQ", 0xff, value)
 
+def write_len(output, objects):
+    output.write(varuint(len(objects)))
+
+def write_value(fmt, output, value):
+    value_bytes = struct.pack("<" + fmt, value)
+    output.write(value_bytes)
+
+def write_u8(output, value):
+    write_value("B", output, value)
+def write_u32(output, value):
+    write_value("I", output, value)
+
 def output_contract(output, contract):
-    output.write(varuint(len(contract.name)))
+    write_len(output, contract.name)
     output.write(contract.name.encode())
+    write_len(output, contract.witness)
+    for type_id, _, _ in contract.witness:
+        write_u8(output, type_id)
+    write_len(output, contract.code)
+    for code in contract.code:
+        func_id = code.func_format.func_id
+        write_u8(output, func_id)
+        for return_value in code.func_format.return_types:
+            write_u32(output, return_value)
+        for arg_idx in code.arg_idxs:
+            write_u32(output, arg_idx)
 
 def output(output, contracts, constants):
-    output.write(varuint(len(constants.variables())))
+    write_len(output, constants.variables())
     for variable in constants.variables():
         type_id = constants.lookup(variable)
-        type_id_bytes = struct.pack("<B", type_id)
-        assert len(type_id_bytes) == 1
-        output.write(type_id_bytes)
-    output.write(varuint(len(contracts)))
+        write_u8(output, type_id)
+    write_len(output, contracts)
     for contract in contracts:
         output_contract(output, contract)
 

@@ -15,4 +15,3 @@ fn main() -> Result<()> {
     println!("Loaded contract: [{:?}]", start.elapsed());
     Ok(())
 }
-
