@@ -1,0 +1,56 @@
+[package]
+name = "darkfi"
+version = "0.1.0"
+authors = ["narodnik <x@x.org>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "drk"
+
+[dependencies]
+ff = "0.10"
+group = "0.10"
+pasta_curves = "0.1.2"
+bitvec = "0.22"
+rand = "0.8.4"
+arrayvec = "0.7.0"
+lazy_static = "1"
+bigint = "4"
+subtle = "2.3"
+
+hex = "0.4.2"
+failure = "0.1.8"
+failure_derive = "0.1.8"
+
+[dependencies.halo2]
+git = "https://github.com/zcash/halo2.git"
+rev = "236a5e37a53152b49bc8c19049bc98e67968fc1c"
+features = ["dev-graph", "gadget-traces", "sanity-checks"]
+
+[dependencies.halo2_poseidon]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f847a7389fc8356143b40d40c28f509a559e2671"
+features = ["halo2"]
+
+[dependencies.halo2_utilities]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f847a7389fc8356143b40d40c28f509a559e2671"
+
+[dependencies.halo2_ecc]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f847a7389fc8356143b40d40c28f509a559e2671"
+
+[dependencies.sinsemilla]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f847a7389fc8356143b40d40c28f509a559e2671"
+
+ [dependencies.orchard]
+git = "https://github.com/parazyd/orchard.git"
+rev = "f847a7389fc8356143b40d40c28f509a559e2671"
+
+[[bin]]
+name = "vm2"
+path = "src/bin/vm2.rs"
+
