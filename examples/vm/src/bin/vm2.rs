@@ -193,16 +193,6 @@ std::result::Result<(), failure::Error>
     let prover = MockProver::run(K, &circuit, vec![public_inputs.clone()]).unwrap();
     assert_eq!(prover.verify(), Ok(()));
 
-    // Break the public inputs by adding 0xdeadbeef to the Coin C
-    public_inputs[0] += pallas::Base::from(0xdeadbeef);
-
-    // Invalid MockProver
-    let prover = MockProver::run(K, &circuit, vec![public_inputs.clone()]).unwrap();
-    assert!(prover.verify().is_err());
-
-    // Make the public inputs valid again.
-    public_inputs[0] -= pallas::Base::from(0xdeadbeef);
-
     // Actual ZK proof
     let start = Instant::now();
     let vk = VerifyingKey::build(empty_circuit.clone());
