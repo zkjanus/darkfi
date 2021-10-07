@@ -4,24 +4,21 @@
 contract Mint {
     Base pub_x
     Base pub_y
-    #Base value
-    #Base asset
-    #Base serial
-    #Base coin_blind
+    Base value
+    Base asset
+    Base serial
+    Base coin_blind
     #Scalar value_blind
     #Scalar asset_blind
 }
 
 circuit Mint {
     poseidon_hash C1 pub_x pub_y
-    constrain_instance C1
-
-    #poseidon_hash C1 pub_x pub_y
-    #poseidon_hash C2 value asset
-    #poseidon_hash C3 serial coin_blind
-    #add C12 C1 C2
-    #add C C12 C3
-    #constrain_instance C 
+    poseidon_hash C2 value asset
+    poseidon_hash C3 serial coin_blind
+    add C12 C1 C2
+    add C C12 C3
+    constrain_instance C 
 
     #ec_mul_short vcv value VALUE_COMMIT_VALUE
     #ec_mul vcr value_blind VALUE_COMMIT_RANDOM

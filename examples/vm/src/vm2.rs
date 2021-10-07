@@ -350,11 +350,16 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                     // todo: we need a plonk chip or make our own with add
                     //stack_base.push(lhs.add(rhs));
                     // for now do this bad hack
-                    let output = lhs.value().unwrap() + rhs.value().unwrap();
+                    let output = if lhs.value().is_some() {
+                        assert!(rhs.value().is_some());
+                        Some(lhs.value().unwrap() + rhs.value().unwrap())
+                    } else {
+                        None
+                    };
                     let output = self.load_private(
                         layouter.namespace(|| "load hash"),
                         config.advices[0],
-                        Some(output),
+                        output,
                     )?;
                     // badbadbad this value is not constrained!
                     stack_base.push(output);
