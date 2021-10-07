@@ -1,3 +1,5 @@
+# :set syntax=zk
+# :source scripts/zk.vim
 constant EcFixedPoint VALUE_COMMIT_VALUE
 constant EcFixedPoint VALUE_COMMIT_RANDOM
 
