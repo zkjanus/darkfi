@@ -26,7 +26,9 @@ def output_contract(output, contract):
     write_len(output, contract.name)
     output.write(contract.name.encode())
     write_len(output, contract.witness)
-    for type_id, _, _ in contract.witness:
+    for type_id, variable, _ in contract.witness:
+        write_len(output, variable)
+        output.write(variable.encode())
         write_u8(output, type_id)
     write_len(output, contract.code)
     for code in contract.code:
@@ -40,6 +42,8 @@ def output_contract(output, contract):
 def output(output, contracts, constants):
     write_len(output, constants.variables())
     for variable in constants.variables():
+        write_len(output, variable)
+        output.write(variable.encode())
         type_id = constants.lookup(variable)
         write_u8(output, type_id)
     write_len(output, contracts)

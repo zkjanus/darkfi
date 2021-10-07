@@ -5,7 +5,7 @@ use crate::impl_vec;
 use crate::serial::{Decodable, Encodable, ReadExt, VarInt};
 use crate::vm2::{ZkBinary, ZkContract, ZkFunctionCall, ZkType};
 
-impl_vec!(ZkType);
+impl_vec!((String, ZkType));
 impl_vec!(ZkFunctionCall);
 impl_vec!((String, ZkContract));
 
@@ -23,7 +23,7 @@ impl Decodable for ZkType {
             0 => Ok(Self::Base),
             1 => Ok(Self::Scalar),
             2 => Ok(Self::EcPoint),
-            3 => Ok(Self::EcConstPoint),
+            3 => Ok(Self::EcFixedPoint),
             _i => Err(Error::BadOperationType),
         }
     }
