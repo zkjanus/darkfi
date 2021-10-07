@@ -1,5 +1,5 @@
-#constant EcFixedPoint VALUE_COMMIT_VALUE
-#constant EcFixedPoint VALUE_COMMIT_RANDOM
+constant EcFixedPoint VALUE_COMMIT_VALUE
+constant EcFixedPoint VALUE_COMMIT_RANDOM
 
 contract Mint {
     Base pub_x
@@ -8,11 +8,12 @@ contract Mint {
     Base asset
     Base serial
     Base coin_blind
-    #Scalar value_blind
-    #Scalar asset_blind
+    Scalar value_blind
+    Scalar asset_blind
 }
 
 circuit Mint {
+    # coin = Hash(pub_x, pub_y, value, asset, serial, coin_blind);
     poseidon_hash C1 pub_x pub_y
     poseidon_hash C2 value asset
     poseidon_hash C3 serial coin_blind
@@ -20,20 +21,24 @@ circuit Mint {
     add C C12 C3
     constrain_instance C 
 
-    #ec_mul_short vcv value VALUE_COMMIT_VALUE
-    #ec_mul vcr value_blind VALUE_COMMIT_RANDOM
-    #ec_add value_commit vcv vcr
-    #ec_get_x x value_commit
-    #ec_get_y y value_commit
-    #constrain_instance x
-    #constrain_instance y
+    # value_commit = PedersenCommit(value, value_blind);
+    ec_mul_short vcv value VALUE_COMMIT_VALUE
+    ec_mul vcr value_blind VALUE_COMMIT_RANDOM
+    ec_add value_commit vcv vcr
+    ec_get_x x value_commit
+    ec_get_y y value_commit
+    constrain_instance x
+    constrain_instance y
 
-    #ec_mul_short acv asset VALUE_COMMIT_VALUE
-    #ec_mul acr asset_blind VALUE_COMMIT_RANDOM
-    #ec_add asset_commit acv acr
-    #ec_get_x x value_commit
-    #ec_get_y y value_commit
-    #constrain_instance x
-    #constrain_instance y
+    # asset_commit = PedersenCommit(asset, asset_blind);
+    ec_mul_short acv asset VALUE_COMMIT_VALUE
+    ec_mul acr asset_blind VALUE_COMMIT_RANDOM
+    ec_add asset_commit acv acr
+    ec_get_x x asset_commit
+    ec_get_y y asset_commit
+    constrain_instance x
+    constrain_instance y
+
+    # return (coin, value_commit, value_blind);
 }
 

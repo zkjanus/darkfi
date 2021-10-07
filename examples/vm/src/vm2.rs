@@ -432,7 +432,7 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
                 ZkFunctionCall::EcGetY(arg_idx) => {
                     assert!(*arg_idx < stack_ec_point.len());
                     let arg = &stack_ec_point[*arg_idx];
-                    let y = arg.inner().x();
+                    let y = arg.inner().y();
                     stack_base.push(y);
                 }
             }

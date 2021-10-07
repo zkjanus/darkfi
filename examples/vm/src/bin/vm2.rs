@@ -160,11 +160,10 @@ fn main() -> std::result::Result<(), failure::Error> {
 
     let mut public_inputs = vec![
         coin,
-        //coin2,
-        //*value_coords.x(),
-        //*value_coords.y(),
-        //*asset_coords.x(),
-        //*asset_coords.y(),
+        *value_coords.x(),
+        *value_coords.y(),
+        *asset_coords.x(),
+        *asset_coords.y(),
     ];
 
     let mut const_fixed_points = HashMap::new();
@@ -186,8 +185,8 @@ fn main() -> std::result::Result<(), failure::Error> {
     circuit.witness_base("asset", pallas::Base::from(asset))?;
     circuit.witness_base("serial", serial)?;
     circuit.witness_base("coin_blind", coin_blind)?;
-    //circuit.witness_scalar("value_blind", value_blind)?;
-    //circuit.witness_scalar("asset_blind", asset_blind)?;
+    circuit.witness_scalar("value_blind", value_blind)?;
+    circuit.witness_scalar("asset_blind", asset_blind)?;
 
     // Valid MockProver
     let prover = MockProver::run(K, &circuit, vec![public_inputs.clone()]).unwrap();
