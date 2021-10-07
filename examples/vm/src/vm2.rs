@@ -74,8 +74,10 @@ impl MintConfig {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct ZkCircuit<'a> {
-    pub const_fixed_points: Vec<&'a OrchardFixedBases>,
+    pub const_fixed_points: HashMap<String, OrchardFixedBases>,
+    pub constants: &'a Vec<(String, ZkType)>,
     pub contract: &'a ZkContract,
     // For each type create a separate stack
     pub witness_base: HashMap<String, Option<pallas::Base>>,
@@ -83,7 +85,7 @@ pub struct ZkCircuit<'a> {
 }
 
 impl<'a> ZkCircuit<'a> {
-    pub fn new(contract: &'a ZkContract) -> Self {
+    pub fn new(const_fixed_points: HashMap<String, OrchardFixedBases>, constants: &'a Vec<(String, ZkType)>, contract: &'a ZkContract) -> Self {
         let mut witness_base = HashMap::new();
         let mut witness_scalar = HashMap::new();
         for (name, type_id) in contract.witness.iter() {
@@ -95,7 +97,8 @@ impl<'a> ZkCircuit<'a> {
         }
 
         Self {
-            const_fixed_points: Vec::new(),
+            const_fixed_points,
+            constants,
             contract,
             witness_base,
             witness_scalar,
@@ -103,8 +106,8 @@ impl<'a> ZkCircuit<'a> {
     }
 
     pub fn witness_base(&mut self, name: &str, value: pallas::Base) -> Result<()> {
-        for (other_name, type_id) in self.contract.witness.iter() {
-            if name != other_name {
+        for (variable, type_id) in self.contract.witness.iter() {
+            if name != variable {
                 continue;
             }
             if *type_id != ZkType::Base {
@@ -117,8 +120,8 @@ impl<'a> ZkCircuit<'a> {
     }
 
     pub fn witness_scalar(&mut self, name: &str, value: pallas::Scalar) -> Result<()> {
-        for (other_name, type_id) in self.contract.witness.iter() {
-            if name != other_name {
+        for (variable, type_id) in self.contract.witness.iter() {
+            if name != variable {
                 continue;
             }
             if *type_id != ZkType::Scalar {
@@ -138,6 +141,7 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
     fn without_witnesses(&self) -> Self {
         Self {
             const_fixed_points: self.const_fixed_points.clone(),
+            constants: self.constants,
             contract: &self.contract,
             witness_base: self.witness_base.keys().map(|key| (key.clone(), None)).collect(),
             witness_scalar: self.witness_scalar.keys().map(|key| (key.clone(), None)).collect(),
@@ -218,23 +222,39 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> std::result::Result<(), PlonkError> {
+        let mut stack_base = Vec::new();
+        let mut stack_scalar = Vec::new();
+        //let mut stack_ec_point = Vec::new();
+        let mut stack_ec_fixed_point = Vec::new();
+
         // Load constants first onto the stacks
-        /*for point in self.const_fixed_points {
-            stack_ec_fixed_point.push(point);
+        for (variable, fixed_point) in self.const_fixed_points.iter() {
+            stack_ec_fixed_point.push(*fixed_point);
         }
 
-        for witness in self.contract.witness {
-            match witness {
-                Base => {
+        // Push the witnesses onto the stacks in order
+        for (variable, type_id) in self.contract.witness.iter() {
+            match *type_id {
+                ZkType::Base => {
+                    let value = self.witness_base.get(variable).expect("witness base set");
+                    stack_base.push(value.clone());
                 },
-                Scalar => {
+                ZkType::Scalar => {
+                    let value = self.witness_scalar.get(variable).expect("witness base set");
+                    stack_scalar.push(value.clone());
                 },
-                EcPoint => {
+                ZkType::EcPoint => {
+                    unimplemented!();
                 },
-                EcFixedPoint => {
+                ZkType::EcFixedPoint => {
+                    unimplemented!();
                 }
             }
-        }*/
+        }
+
+        for func_call in self.contract.code.iter() {
+            println!("{:?}", func_call);
+        }
 
         // At this point we've enforced all of our public inputs.
         Ok(())
