@@ -153,8 +153,8 @@ class SyntaxStruct:
                 assert len(args) == func_format.total_arguments()
 
                 return_values = []
-                if func_format.return_types:
-                    rv_len = len(func_format.return_types)
+                if func_format.return_type_ids:
+                    rv_len = len(func_format.return_type_ids)
                     return_values, args = args[:rv_len], args[rv_len:]
 
                 func_id = func_format.func_id
@@ -205,10 +205,10 @@ class DynamicTracer:
     f"Found {type_name} but expected variable of "
     f"type {stack_type_name}", code_line)
 
-                assert len(return_values) == len(func_format.return_types)
+                assert len(return_values) == len(func_format.return_type_ids)
 
                 for return_variable, return_type_id \
-                    in zip(return_values, func_format.return_types):
+                    in zip(return_values, func_format.return_type_ids):
 
                     # Note that later variables shadow earlier ones.
                     # We accept this.
@@ -285,10 +285,10 @@ class Compiler:
                 # This is the info to be serialized, not the variable names
                 arg_idxs.append(loc_idx)
 
-            assert len(return_values) == len(func_format.return_types)
+            assert len(return_values) == len(func_format.return_type_ids)
 
             for return_variable, return_type_id \
-                in zip(return_values, func_format.return_types):
+                in zip(return_values, func_format.return_type_ids):
 
                 # Allocate returned values so they can be used by
                 # subsequent function calls.
@@ -313,7 +313,11 @@ def load(src_file):
     source = []
     for i, original_line in enumerate(src_file):
         # Remove whitespace on both sides
-        line = original_line.strip().split()
+        line = original_line.strip()
+        # Strip out comments
+        line = line.split("#")[0]
+        # Split at whitespace
+        line = line.split()
         if not line:
             continue
         line_number = i + 1

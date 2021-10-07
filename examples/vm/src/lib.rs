@@ -19,4 +19,3 @@ pub mod vm2;
 pub mod vm2_serial;
 //pub mod vm_serial;
 //pub mod wallet;
-

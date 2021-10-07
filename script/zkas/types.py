@@ -24,15 +24,13 @@ FUNC_ID_EC_GET_Y                = 7
 
 class FuncFormat:
 
-    def __init__(self, func_id, return_types, param_types):
+    def __init__(self, func_id, return_type_ids, param_types):
         self.func_id = func_id
-        self.return_types = return_types
+        self.return_type_ids = return_type_ids
         self.param_types = param_types
 
     def total_arguments(self):
-        if self.return_types:
-            return 1 + len(self.param_types)
-        return len(self.param_types)
+        return len(self.return_type_ids) + len(self.param_types)
 
 function_formats = {
     "poseidon_hash": FuncFormat(

@@ -1,12 +1,6 @@
-use std::{
-    collections::HashMap,
-time::Instant,
-    fs::File
-};
-use rand::rngs::OsRng;
 use group::{Curve, Group};
 use halo2::{
-    arithmetic::{CurveAffine, CurveExt, FieldExt, Field},
+    arithmetic::{CurveAffine, CurveExt, Field, FieldExt},
     circuit::{Layouter, SimpleFloorPlanner},
     dev::MockProver,
     pasta::{pallas, vesta},
@@ -20,13 +14,13 @@ use halo2_poseidon::{
     primitive::{ConstantLength, Hash, P128Pow5T3 as OrchardNullifier},
 };
 use orchard::constants::fixed_bases::{
-OrchardFixedBases,
-    VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES, VALUE_COMMITMENT_V_BYTES,
+    OrchardFixedBases, VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES,
+    VALUE_COMMITMENT_V_BYTES,
 };
+use rand::rngs::OsRng;
+use std::{collections::HashMap, fs::File, time::Instant};
 
-use drk::
-    serial::Decodable
-;
+use drk::serial::Decodable;
 
 // The number of rows in our circuit cannot exceed 2^k
 const K: u32 = 9;
@@ -117,10 +111,7 @@ impl Proof {
     // }
 }
 
-fn main() -> 
-
-std::result::Result<(), failure::Error>
-{
+fn main() -> std::result::Result<(), failure::Error> {
     let start = Instant::now();
     let file = File::open("../../proof/mint.zk.bin")?;
     let zkbin = drk::vm2::ZkBinary::decode(file)?;
@@ -159,6 +150,8 @@ std::result::Result<(), failure::Error>
         coin += Hash::init(OrchardNullifier, ConstantLength::<2>).hash(*msg);
     }
 
+    let coin2 = Hash::init(OrchardNullifier, ConstantLength::<2>).hash([*coords.x(), *coords.y()]);
+
     let value_commit = pedersen_commitment(value, value_blind);
     let value_coords = value_commit.to_affine().coordinates().unwrap();
 
@@ -166,28 +159,35 @@ std::result::Result<(), failure::Error>
     let asset_coords = asset_commit.to_affine().coordinates().unwrap();
 
     let mut public_inputs = vec![
-        coin,
-        *value_coords.x(),
-        *value_coords.y(),
-        *asset_coords.x(),
-        *asset_coords.y(),
+        //coin,
+        coin2,
+        //*value_coords.x(),
+        //*value_coords.y(),
+        //*asset_coords.x(),
+        //*asset_coords.y(),
     ];
 
     let mut const_fixed_points = HashMap::new();
-    const_fixed_points.insert("VALUE_COMMIT_VALUE".to_string(), OrchardFixedBases::ValueCommitV);
-    const_fixed_points.insert("VALUE_COMMIT_RANDOM".to_string(), OrchardFixedBases::ValueCommitR);
+    const_fixed_points.insert(
+        "VALUE_COMMIT_VALUE".to_string(),
+        OrchardFixedBases::ValueCommitV,
+    );
+    const_fixed_points.insert(
+        "VALUE_COMMIT_RANDOM".to_string(),
+        OrchardFixedBases::ValueCommitR,
+    );
 
     let mut circuit = drk::vm2::ZkCircuit::new(const_fixed_points, &zkbin.constants, contract);
     let empty_circuit = circuit.clone();
 
     circuit.witness_base("pub_x", *coords.x())?;
     circuit.witness_base("pub_y", *coords.y())?;
-    circuit.witness_base("value", pallas::Base::from(value))?;
-    circuit.witness_base("asset", pallas::Base::from(asset))?;
-    circuit.witness_base("serial", serial)?;
-    circuit.witness_base("coin_blind", coin_blind)?;
-    circuit.witness_scalar("value_blind", value_blind)?;
-    circuit.witness_scalar("asset_blind", asset_blind)?;
+    //circuit.witness_base("value", pallas::Base::from(value))?;
+    //circuit.witness_base("asset", pallas::Base::from(asset))?;
+    //circuit.witness_base("serial", serial)?;
+    //circuit.witness_base("coin_blind", coin_blind)?;
+    //circuit.witness_scalar("value_blind", value_blind)?;
+    //circuit.witness_scalar("asset_blind", asset_blind)?;
 
     // Valid MockProver
     let prover = MockProver::run(K, &circuit, vec![public_inputs.clone()]).unwrap();

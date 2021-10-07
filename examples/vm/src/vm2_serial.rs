@@ -42,50 +42,27 @@ impl Decodable for ZkFunctionCall {
         match func_id {
             0 => Ok(Self::PoseidonHash(
                 ReadExt::read_u32(&mut d)? as usize,
-                (
-                    ReadExt::read_u32(&mut d)? as usize,
-                    ReadExt::read_u32(&mut d)? as usize,
-                ),
+                ReadExt::read_u32(&mut d)? as usize,
             )),
             1 => Ok(Self::Add(
                 ReadExt::read_u32(&mut d)? as usize,
-                (
-                    ReadExt::read_u32(&mut d)? as usize,
-                    ReadExt::read_u32(&mut d)? as usize,
-                ),
-            )),
-            2 => Ok(Self::ConstrainInstance(
                 ReadExt::read_u32(&mut d)? as usize,
             )),
+            2 => Ok(Self::ConstrainInstance(ReadExt::read_u32(&mut d)? as usize)),
             3 => Ok(Self::EcMulShort(
                 ReadExt::read_u32(&mut d)? as usize,
-                (
-                    ReadExt::read_u32(&mut d)? as usize,
-                    ReadExt::read_u32(&mut d)? as usize,
-                ),
+                ReadExt::read_u32(&mut d)? as usize,
             )),
             4 => Ok(Self::EcMul(
                 ReadExt::read_u32(&mut d)? as usize,
-                (
-                    ReadExt::read_u32(&mut d)? as usize,
-                    ReadExt::read_u32(&mut d)? as usize,
-                ),
+                ReadExt::read_u32(&mut d)? as usize,
             )),
             5 => Ok(Self::EcAdd(
                 ReadExt::read_u32(&mut d)? as usize,
-                (
-                    ReadExt::read_u32(&mut d)? as usize,
-                    ReadExt::read_u32(&mut d)? as usize,
-                ),
-            )),
-            6 => Ok(Self::EcGetX(
                 ReadExt::read_u32(&mut d)? as usize,
-                    ReadExt::read_u32(&mut d)? as usize,
             )),
-            7 => Ok(Self::EcGetY(
-                ReadExt::read_u32(&mut d)? as usize,
-                    ReadExt::read_u32(&mut d)? as usize,
-            )),
+            6 => Ok(Self::EcGetX(ReadExt::read_u32(&mut d)? as usize)),
+            7 => Ok(Self::EcGetY(ReadExt::read_u32(&mut d)? as usize)),
             _i => Err(Error::BadOperationType),
         }
     }

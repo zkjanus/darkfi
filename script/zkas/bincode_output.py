@@ -34,8 +34,6 @@ def output_contract(output, contract):
     for code in contract.code:
         func_id = code.func_format.func_id
         write_u8(output, func_id)
-        for return_value in code.func_format.return_types:
-            write_u32(output, return_value)
         for arg_idx in code.arg_idxs:
             write_u32(output, arg_idx)
 

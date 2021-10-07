@@ -1,22 +1,31 @@
+use halo2::{
+    circuit::{Layouter, SimpleFloorPlanner},
+    pasta::pallas,
+    plonk,
+    plonk::{
+        Advice, Circuit, Column, ConstraintSystem, Error as PlonkError, Instance as InstanceColumn,
+        Selector,
+    },
+};
 use std::collections::HashMap;
 use std::{convert::TryInto, time::Instant};
-use halo2::{
-    pasta::pallas,
-    circuit::{Layouter, SimpleFloorPlanner},
-    plonk::{Advice, Circuit, Column, ConstraintSystem, Instance as InstanceColumn, Selector, Error as PlonkError},
-};
 
-use halo2_ecc::chip::{EccPoint, EccChip, EccConfig};
+use halo2_ecc::{
+    chip::{EccChip, EccConfig},
+    gadget::FixedPoint,
+};
 use halo2_poseidon::{
+    gadget::{Hash as PoseidonHash, Word},
+    pow5t3::{Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig, StateWord},
     primitive::{ConstantLength, Hash, P128Pow5T3 as OrchardNullifier},
-    pow5t3::{Pow5T3Chip as PoseidonChip, Pow5T3Config as PoseidonConfig}};
+};
 use halo2_utilities::{
     lookup_range_check::LookupRangeCheckConfig, CellValue, UtilitiesInstructions, Var,
 };
 use orchard::constants::{OrchardCommitDomains, OrchardFixedBases, OrchardHashDomains};
 use sinsemilla::chip::{SinsemillaChip, SinsemillaConfig};
 
-use crate::error::{Result, Error};
+use crate::error::{Error, Result};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ZkType {
@@ -26,19 +35,18 @@ pub enum ZkType {
     EcFixedPoint,
 }
 
-type RetValIdx = usize;
 type ArgIdx = usize;
 
 #[derive(Clone, Debug)]
 pub enum ZkFunctionCall {
-    PoseidonHash(RetValIdx, (ArgIdx, ArgIdx)),
-    Add(RetValIdx, (ArgIdx, ArgIdx)),
+    PoseidonHash(ArgIdx, ArgIdx),
+    Add(ArgIdx, ArgIdx),
     ConstrainInstance(ArgIdx),
-    EcMulShort(RetValIdx, (ArgIdx, ArgIdx)),
-    EcMul(RetValIdx, (ArgIdx, ArgIdx)),
-    EcAdd(RetValIdx, (ArgIdx, ArgIdx)),
-    EcGetX(RetValIdx, ArgIdx),
-    EcGetY(RetValIdx, ArgIdx),
+    EcMulShort(ArgIdx, ArgIdx),
+    EcMul(ArgIdx, ArgIdx),
+    EcAdd(ArgIdx, ArgIdx),
+    EcGetX(ArgIdx),
+    EcGetY(ArgIdx),
 }
 
 pub struct ZkBinary {
@@ -85,14 +93,24 @@ pub struct ZkCircuit<'a> {
 }
 
 impl<'a> ZkCircuit<'a> {
-    pub fn new(const_fixed_points: HashMap<String, OrchardFixedBases>, constants: &'a Vec<(String, ZkType)>, contract: &'a ZkContract) -> Self {
+    pub fn new(
+        const_fixed_points: HashMap<String, OrchardFixedBases>,
+        constants: &'a Vec<(String, ZkType)>,
+        contract: &'a ZkContract,
+    ) -> Self {
         let mut witness_base = HashMap::new();
         let mut witness_scalar = HashMap::new();
         for (name, type_id) in contract.witness.iter() {
             match type_id {
-                ZkType::Base => { witness_base.insert(name.clone(), None); },
-                ZkType::Scalar => { witness_scalar.insert(name.clone(), None); },
-                _ => { unimplemented!(); }
+                ZkType::Base => {
+                    witness_base.insert(name.clone(), None);
+                }
+                ZkType::Scalar => {
+                    witness_scalar.insert(name.clone(), None);
+                }
+                _ => {
+                    unimplemented!();
+                }
             }
         }
 
@@ -134,6 +152,10 @@ impl<'a> ZkCircuit<'a> {
     }
 }
 
+impl<'a> UtilitiesInstructions<pallas::Base> for ZkCircuit<'a> {
+    type Var = CellValue<pallas::Base>;
+}
+
 impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
     type Config = MintConfig;
     type FloorPlanner = SimpleFloorPlanner;
@@ -143,8 +165,16 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
             const_fixed_points: self.const_fixed_points.clone(),
             constants: self.constants,
             contract: &self.contract,
-            witness_base: self.witness_base.keys().map(|key| (key.clone(), None)).collect(),
-            witness_scalar: self.witness_scalar.keys().map(|key| (key.clone(), None)).collect(),
+            witness_base: self
+                .witness_base
+                .keys()
+                .map(|key| (key.clone(), None))
+                .collect(),
+            witness_scalar: self
+                .witness_scalar
+                .keys()
+                .map(|key| (key.clone(), None))
+                .collect(),
         }
     }
 
@@ -222,14 +252,30 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
     ) -> std::result::Result<(), PlonkError> {
+        let ecc_chip = config.ecc_chip();
+
         let mut stack_base = Vec::new();
         let mut stack_scalar = Vec::new();
-        //let mut stack_ec_point = Vec::new();
+        let mut stack_ec_point = Vec::new();
         let mut stack_ec_fixed_point = Vec::new();
 
         // Load constants first onto the stacks
-        for (variable, fixed_point) in self.const_fixed_points.iter() {
-            stack_ec_fixed_point.push(*fixed_point);
+        for (variable, type_id) in self.constants.iter() {
+            match *type_id {
+                ZkType::Base => {
+                    unimplemented!();
+                }
+                ZkType::Scalar => {
+                    unimplemented!();
+                }
+                ZkType::EcPoint => {
+                    unimplemented!();
+                }
+                ZkType::EcFixedPoint => {
+                    let value = self.const_fixed_points[variable];
+                    stack_ec_fixed_point.push(value);
+                }
+            }
         }
 
         // Push the witnesses onto the stacks in order
@@ -237,27 +283,157 @@ impl<'a> Circuit<pallas::Base> for ZkCircuit<'a> {
             match *type_id {
                 ZkType::Base => {
                     let value = self.witness_base.get(variable).expect("witness base set");
+                    let value = self.load_private(
+                        layouter.namespace(|| "load pubkey x"),
+                        config.advices[0],
+                        *value,
+                    )?;
                     stack_base.push(value.clone());
-                },
+                }
                 ZkType::Scalar => {
                     let value = self.witness_scalar.get(variable).expect("witness base set");
                     stack_scalar.push(value.clone());
-                },
+                }
                 ZkType::EcPoint => {
                     unimplemented!();
-                },
+                }
                 ZkType::EcFixedPoint => {
                     unimplemented!();
                 }
             }
         }
 
+        let mut current_instance_offset = 0;
+
         for func_call in self.contract.code.iter() {
-            println!("{:?}", func_call);
+            match func_call {
+                ZkFunctionCall::PoseidonHash(lhs_idx, rhs_idx) => {
+                    assert!(*lhs_idx < stack_base.len());
+                    assert!(*rhs_idx < stack_base.len());
+                    let messages = [stack_base[*lhs_idx], stack_base[*rhs_idx]];
+                    let poseidon_message = layouter.assign_region(
+                        || "load message",
+                        |mut region| {
+                            let mut message_word = |i: usize| {
+                                let val = messages[i].value();
+                                let var = region.assign_advice(
+                                    || format!("load message_{}", i),
+                                    config.poseidon_config.state()[i],
+                                    0,
+                                    || val.ok_or(plonk::Error::SynthesisError),
+                                )?;
+                                region.constrain_equal(var, messages[i].cell())?;
+                                Ok(Word::<_, _, OrchardNullifier, 3, 2>::from_inner(
+                                    StateWord::new(var, val),
+                                ))
+                            };
+                            Ok([message_word(0)?, message_word(1)?])
+                        },
+                    )?;
+
+                    let poseidon_hasher = PoseidonHash::init(
+                        config.poseidon_chip(),
+                        layouter.namespace(|| "Poseidon init"),
+                        ConstantLength::<2>,
+                    )?;
+
+                    let poseidon_output = poseidon_hasher
+                        .hash(layouter.namespace(|| "Poseidon hash"), poseidon_message)?;
+
+                    let poseidon_output: CellValue<pallas::Base> = poseidon_output.inner().into();
+                    stack_base.push(poseidon_output);
+                }
+                ZkFunctionCall::Add(lhs_idx, rhs_idx) => {
+                    assert!(*lhs_idx < stack_base.len());
+                    assert!(*rhs_idx < stack_base.len());
+                    let (lhs, rhs) = (stack_base[*lhs_idx], stack_base[*rhs_idx]);
+                    // todo: we need a plonk chip or make our own with add
+                    //stack_base.push(lhs.add(rhs));
+                    // for now do this bad hack
+                    let output = lhs.value().unwrap() + rhs.value().unwrap();
+                    let output = self.load_private(
+                        layouter.namespace(|| "load hash"),
+                        config.advices[0],
+                        Some(output),
+                    )?;
+                    // badbadbad this value is not constrained!
+                    stack_base.push(output);
+                }
+                ZkFunctionCall::ConstrainInstance(arg_idx) => {
+                    assert!(*arg_idx < stack_base.len());
+                    let arg = stack_base[*arg_idx];
+                    layouter.constrain_instance(
+                        arg.cell(),
+                        config.primary,
+                        current_instance_offset,
+                    )?;
+                    current_instance_offset += 1;
+                }
+                ZkFunctionCall::EcMulShort(value_idx, point_idx) => {
+                    assert!(*value_idx < stack_base.len());
+                    let value = stack_base[*value_idx];
+
+                    assert!(*point_idx < stack_ec_fixed_point.len());
+                    let fixed_point = stack_ec_fixed_point[*point_idx];
+
+                    // This constant one is used for multiplication
+                    let one = self.load_constant(
+                        layouter.namespace(|| "constant one"),
+                        config.advices[0],
+                        pallas::Base::one(),
+                    )?;
+
+                    // v * G_1
+                    let (result, _) = {
+                        let value_commit_v = FixedPoint::from_inner(ecc_chip.clone(), fixed_point);
+                        value_commit_v.mul_short(
+                            layouter.namespace(|| "[value] ValueCommitV"),
+                            (value, one),
+                        )?
+                    };
+
+                    stack_ec_point.push(result);
+                }
+                ZkFunctionCall::EcMul(value_idx, point_idx) => {
+                    assert!(*value_idx < stack_scalar.len());
+                    let value = stack_scalar[*value_idx];
+
+                    assert!(*point_idx < stack_ec_fixed_point.len());
+                    let fixed_point = stack_ec_fixed_point[*point_idx];
+
+                    let (result, _) = {
+                        let value_commit_r = FixedPoint::from_inner(ecc_chip.clone(), fixed_point);
+                        value_commit_r
+                            .mul(layouter.namespace(|| "[value_blind] ValueCommitR"), value)?
+                    };
+
+                    stack_ec_point.push(result);
+                }
+                ZkFunctionCall::EcAdd(lhs_idx, rhs_idx) => {
+                    assert!(*lhs_idx < stack_ec_point.len());
+                    assert!(*rhs_idx < stack_ec_point.len());
+                    let lhs = &stack_ec_point[*lhs_idx];
+                    let rhs = &stack_ec_point[*rhs_idx];
+
+                    let result = lhs.add(layouter.namespace(|| "valuecommit"), &rhs)?;
+                    stack_ec_point.push(result);
+                }
+                ZkFunctionCall::EcGetX(arg_idx) => {
+                    assert!(*arg_idx < stack_ec_point.len());
+                    let arg = &stack_ec_point[*arg_idx];
+                    let x = arg.inner().x();
+                    stack_base.push(x);
+                }
+                ZkFunctionCall::EcGetY(arg_idx) => {
+                    assert!(*arg_idx < stack_ec_point.len());
+                    let arg = &stack_ec_point[*arg_idx];
+                    let y = arg.inner().x();
+                    stack_base.push(y);
+                }
+            }
         }
 
         // At this point we've enforced all of our public inputs.
         Ok(())
     }
 }
-
