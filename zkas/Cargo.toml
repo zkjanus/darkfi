@@ -1,0 +1,10 @@
+[package]
+name = "zkas"
+version = "0.0.0"
+authors = ["darkfi <dev@dark.fi"]
+edition = "2018"
+
+[dependencies]
+anyhow = "1.0.44"
+clap = "2.33.3"
+lazy_static = "1.4.0"
