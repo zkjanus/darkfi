@@ -1,4 +1,6 @@
+pub mod compiler;
+pub mod output;
 pub mod parser;
-pub mod state;
-pub mod syntax;
-pub mod types;
+pub(crate) mod state;
+pub(crate) mod tracer;
+pub(crate) mod types;

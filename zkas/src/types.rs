@@ -1,41 +1,52 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
-const TYPE_ID_BASE: usize = 0;
-const TYPE_ID_SCALAR: usize = 1;
-const TYPE_ID_EC_POINT: usize = 2;
-const TYPE_ID_EC_FIXED_POINT: usize = 3;
-const TYPE_ID_LAST: usize = 4;
-
-#[derive(Debug)]
-pub enum AllowedTypes {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum TypeId {
     Base,
     Scalar,
+    EcPoint,
     EcFixedPoint,
+    LastId,
 }
 
-const FUNC_ID_POSEIDON_HASH: usize = 0;
-const FUNC_ID_ADD: usize = 1;
-const FUNC_ID_CONSTRAIN_INSTANCE: usize = 2;
-const FUNC_ID_EC_MUL_SHORT: usize = 3;
-const FUNC_ID_EC_MUL: usize = 4;
-const FUNC_ID_EC_ADD: usize = 4;
-const FUNC_ID_EC_GET_X: usize = 4;
-const FUNC_ID_EC_GET_Y: usize = 4;
+#[derive(Debug, Clone)]
+pub enum FuncId {
+    PoseidonHash = 0,
+    Add = 1,
+    ConstrainInstance = 2,
+    EcMulShort = 3,
+    EcMul = 4,
+    EcAdd = 5,
+    EcGetX = 6,
+    EcGetY = 7,
+}
 
-#[derive(Debug)]
+lazy_static! {
+    pub static ref ALLOWED_TYPES: HashMap<&'static str, TypeId> = {
+        let mut map = HashMap::new();
+
+        map.insert("Base", TypeId::Base);
+        map.insert("Scalar", TypeId::Scalar);
+        map.insert("EcFixedPoint", TypeId::EcFixedPoint);
+
+        map
+    };
+}
+
+#[derive(Debug, Clone)]
 pub struct FuncFormat {
-    func_id: usize,
-    return_type_ids: Vec<usize>,
-    param_types: Vec<usize>,
+    pub func_id: FuncId,
+    pub return_type_ids: Vec<TypeId>,
+    pub param_types: Vec<TypeId>,
 }
 
 impl FuncFormat {
-    pub fn new(func_id: usize, return_type_ids: Vec<usize>, param_types: Vec<usize>) -> Self {
+    pub fn new(func_id: FuncId, return_type_ids: &[TypeId], param_types: &[TypeId]) -> Self {
         FuncFormat {
             func_id,
-            return_type_ids,
-            param_types,
+            return_type_ids: return_type_ids.to_vec(),
+            param_types: param_types.to_vec(),
         }
     }
 
@@ -45,71 +56,63 @@ impl FuncFormat {
 }
 
 lazy_static! {
-    static ref FUNCTION_FORMATS: HashMap<&'static str, FuncFormat> = {
+    pub static ref FUNCTION_FORMATS: HashMap<&'static str, FuncFormat> = {
         let mut map = HashMap::new();
 
         map.insert(
             "poseidon_hash",
             FuncFormat::new(
-                FUNC_ID_POSEIDON_HASH,
-                vec![TYPE_ID_BASE],
-                vec![TYPE_ID_BASE, TYPE_ID_BASE],
+                FuncId::PoseidonHash,
+                &[TypeId::Base],
+                &[TypeId::Base, TypeId::Base],
             ),
         );
 
         map.insert(
             "add",
-            FuncFormat::new(
-                FUNC_ID_ADD,
-                vec![TYPE_ID_BASE],
-                vec![TYPE_ID_BASE, TYPE_ID_BASE],
-            ),
+            FuncFormat::new(FuncId::Add, &[TypeId::Base], &[TypeId::Base, TypeId::Base]),
         );
 
         map.insert(
             "constrain_instance",
-            FuncFormat::new(
-                FUNC_ID_CONSTRAIN_INSTANCE,
-                vec![],
-                vec![TYPE_ID_BASE, TYPE_ID_BASE],
-            ),
+            FuncFormat::new(FuncId::ConstrainInstance, &[], &[TypeId::Base]),
         );
 
         map.insert(
             "ec_mul_short",
             FuncFormat::new(
-                FUNC_ID_EC_MUL_SHORT,
-                vec![TYPE_ID_EC_POINT],
-                vec![TYPE_ID_BASE, TYPE_ID_EC_FIXED_POINT],
+                FuncId::EcMulShort,
+                &[TypeId::EcPoint],
+                &[TypeId::Base, TypeId::EcFixedPoint],
             ),
         );
 
         map.insert(
             "ec_mul",
             FuncFormat::new(
-                FUNC_ID_EC_MUL,
-                vec![TYPE_ID_EC_POINT],
-                vec![TYPE_ID_EC_POINT, TYPE_ID_EC_POINT],
+                FuncId::EcMul,
+                &[TypeId::EcPoint],
+                &[TypeId::Scalar, TypeId::EcFixedPoint],
             ),
         );
 
         map.insert(
             "ec_add",
             FuncFormat::new(
-                FUNC_ID_EC_ADD,
-                vec![TYPE_ID_EC_POINT],
-                vec![TYPE_ID_EC_POINT, TYPE_ID_EC_POINT],
+                FuncId::EcAdd,
+                &[TypeId::EcPoint],
+                &[TypeId::EcPoint, TypeId::EcPoint],
             ),
         );
 
         map.insert(
             "ec_get_x",
-            FuncFormat::new(FUNC_ID_EC_GET_X, vec![TYPE_ID_BASE], vec![TYPE_ID_EC_POINT]),
+            FuncFormat::new(FuncId::EcGetX, &[TypeId::Base], &[TypeId::EcPoint]),
         );
 
         map.insert(
             "ec_get_y",
-            FuncFormat::new(FUNC_ID_EC_GET_Y, vec![TYPE_ID_BASE], vec![TYPE_ID_EC_POINT]),
+            FuncFormat::new(FuncId::EcGetY, &[TypeId::Base], &[TypeId::EcPoint]),
         );
 
         map

@@ -1,37 +1,6 @@
 use std::collections::{hash_map::Keys, HashMap};
 
-#[derive(Default)]
-pub struct Constants {
-    pub table: Vec<usize>,
-    pub map: HashMap<&'static str, usize>,
-}
-
-impl Constants {
-    pub fn new() -> Self {
-        Constants {
-            table: vec![],
-            map: HashMap::new(),
-        }
-    }
-
-    pub fn add(&mut self, variable: &'static str, type_id: usize) {
-        let idx = self.table.len();
-        self.table.push(type_id);
-        self.map.insert(variable, idx);
-    }
-
-    pub fn lookup(&self, variable: &str) -> Option<usize> {
-        if let Some(idx) = self.map.get(variable) {
-            return Some(self.table[*idx]);
-        }
-
-        None
-    }
-
-    pub fn variables(&self) -> Keys<'_, &str, usize> {
-        self.map.keys()
-    }
-}
+use crate::types::TypeId;
 
 #[derive(Debug, Clone)]
 pub struct Line {
@@ -50,4 +19,35 @@ impl Line {
     }
 }
 
-// TODO: impl format/display for Line
+#[derive(Debug, Default, Clone)]
+pub struct Constants {
+    pub table: Vec<TypeId>,
+    pub map: HashMap<String, usize>,
+}
+
+impl Constants {
+    pub fn new() -> Self {
+        Constants {
+            table: vec![],
+            map: HashMap::new(),
+        }
+    }
+
+    pub fn add(&mut self, variable: String, type_id: TypeId) {
+        let idx = self.table.len();
+        self.table.push(type_id);
+        self.map.insert(variable, idx);
+    }
+
+    pub fn lookup(&self, variable: String) -> TypeId {
+        if let Some(idx) = self.map.get(variable.as_str()) {
+            return self.table[*idx];
+        }
+
+        panic!();
+    }
+
+    pub fn variables(&self) -> Keys<'_, String, usize> {
+        self.map.keys()
+    }
+}
