@@ -12,14 +12,14 @@ pub enum TypeId {
 
 #[derive(Debug, Clone)]
 pub enum FuncId {
-    PoseidonHash = 0,
-    Add = 1,
-    ConstrainInstance = 2,
-    EcMulShort = 3,
-    EcMul = 4,
-    EcAdd = 5,
-    EcGetX = 6,
-    EcGetY = 7,
+    PoseidonHash,
+    Add,
+    ConstrainInstance,
+    EcMulShort,
+    EcMul,
+    EcAdd,
+    EcGetX,
+    EcGetY,
 }
 
 lazy_static! {
