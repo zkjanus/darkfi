@@ -20,7 +20,7 @@ in
 
 naersk.lib."${targetPlatform.system}".buildPackage rec {
   src = ./.;
-
+  cargoBuildOptions = old: old ++ [ "--all-features" ];
   nativeBuildInputs = with pkgs; [
     rustfmt
     llvm
