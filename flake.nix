@@ -5,11 +5,15 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     naersk.url = "github:nmattia/naersk";
     naersk.inputs.nixpkgs.follows = "nixpkgs";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    #rust-overlay.url = "github:oxalica/rust-overlay";
+    #rust-overlay.inputs.nixpkgs.follows = "nixpkgs";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, naersk, rust-overlay }:
+  outputs = { self, nixpkgs, naersk, /*rust-overlay,*/ fenix }:
     let
       cargoToml = (builtins.fromTOML (builtins.readFile ./Cargo.toml));
       supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" ];
@@ -17,7 +21,9 @@
     in
       {
         overlay = final: prev: {
-          "${cargoToml.package.name}" = final.callPackage ./. { inherit naersk; };
+          "${cargoToml.package.name}" = final.callPackage ./. {
+            inherit naersk fenix;
+          };
         };
 
         packages = forAllSystems (system:
@@ -32,11 +38,11 @@
             {
               "${cargoToml.package.name}" = pkgs."${cargoToml.package.name}";
             });
-
-
         defaultPackage = forAllSystems (system: (import nixpkgs {
           inherit system;
-          overlays = [ self.overlay ];
+          overlays = [
+            self.overlay
+          ];
         })."${cargoToml.package.name}");
 
         checks = forAllSystems (system:
@@ -63,7 +69,9 @@
           let
             pkgs = import nixpkgs {
               inherit system;
-              overlays = [ self.overlay ];
+              overlays = [
+                self.overlay
+              ];
             };
           in
             pkgs.mkShell {

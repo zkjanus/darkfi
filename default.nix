@@ -2,6 +2,7 @@
 { lib
 , pkgs
 , naersk
+, fenix
 , stdenv
 , clangStdenv
 , hostPlatform
@@ -18,7 +19,9 @@ let
   cargoToml = (builtins.fromTOML (builtins.readFile ./Cargo.toml));
 in
 
-naersk.lib."${targetPlatform.system}".buildPackage rec {
+(naersk.lib."${targetPlatform.system}".override {
+  inherit (fenix.packages.${targetPlatform.system}.beta) cargo rustc;
+}).buildPackage rec {
   src = ./.;
   cargoBuildOptions = old: old ++ [ "--all-features" ];
   nativeBuildInputs = with pkgs; [
@@ -31,8 +34,13 @@ naersk.lib."${targetPlatform.system}".buildPackage rec {
   buildInputs = with pkgs; [
     rustfmt
     pkg-config
-    cargo
-    rustc
+    (fenix.packages.${targetPlatform.system}.beta.withComponents [
+      "cargo"
+      "clippy"
+      "rust-src"
+      "rustc"
+      "rustfmt"
+    ])
     libiconv
     libclang
     openssl.dev
